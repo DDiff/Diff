@@ -34,16 +34,14 @@
  * @ingroup DifferenceEngine
  */
 abstract class DiffFormatter {
-	/**
-	 * Number of leading context "lines" to preserve.
+	/** @var int Number of leading context "lines" to preserve.
 	 *
 	 * This should be left at zero for this class, but subclasses
 	 * may want to set this to other values.
 	 */
 	protected $leadingContextLines = 0;
 
-	/**
-	 * Number of trailing context "lines" to preserve.
+	/** @var int Number of trailing context "lines" to preserve.
 	 *
 	 * This should be left at zero for this class, but subclasses
 	 * may want to set this to other values.
@@ -68,6 +66,8 @@ abstract class DiffFormatter {
 
 		$this->startDiff();
 
+		// Initialize $x0 and $y0 to prevent IDEs from getting confused.
+		$x0 = $y0 = 0;
 		foreach ( $diff->edits as $edit ) {
 			if ( $edit->type == 'copy' ) {
 				if ( is_array( $block ) ) {
@@ -76,7 +76,7 @@ abstract class DiffFormatter {
 					} else {
 						if ( $ntrail ) {
 							$context = array_slice( $edit->orig, 0, $ntrail );
-							$block[] = new DiffOp_Copy( $context );
+							$block[] = new DiffOpCopy( $context );
 						}
 						$this->block( $x0, $ntrail + $xi - $x0,
 							$y0, $ntrail + $yi - $y0,
@@ -92,7 +92,7 @@ abstract class DiffFormatter {
 					$y0 = $yi - count( $context );
 					$block = array();
 					if ( $context ) {
-						$block[] = new DiffOp_Copy( $context );
+						$block[] = new DiffOpCopy( $context );
 					}
 				}
 				$block[] = $edit;
@@ -114,15 +114,17 @@ abstract class DiffFormatter {
 
 		$end = $this->endDiff();
 		wfProfileOut( __METHOD__ );
+
 		return $end;
 	}
 
 	/**
-	 * @param $xbeg
-	 * @param $xlen
-	 * @param $ybeg
-	 * @param $ylen
+	 * @param int $xbeg
+	 * @param int $xlen
+	 * @param int $ybeg
+	 * @param int $ylen
 	 * @param $edits
+	 * @throws MWException
 	 */
 	protected function block( $xbeg, $xlen, $ybeg, $ylen, &$edits ) {
 		wfProfileIn( __METHOD__ );
@@ -154,6 +156,7 @@ abstract class DiffFormatter {
 	protected function endDiff() {
 		$val = ob_get_contents();
 		ob_end_clean();
+
 		return $val;
 	}
 
