@@ -11,31 +11,41 @@
  * suffixes (i.e. "=======" immediately followed by another prefix)
  * see class LoadFileConflictPageEditor
  */
-class BlockDiffFormatter extends DiffFormatter
-{
-    function BlockDiffFormatter($context_lines = 4) {
-        $this->leading_context_lines = $context_lines;
-        $this->trailing_context_lines = $context_lines;
+class BlockDiffFormatter extends DiffFormatter {
+
+  function BlockDiffFormatter($context_lines = 4) {
+    $this->leading_context_lines = $context_lines;
+    $this->trailing_context_lines = $context_lines;
+  }
+
+  function _lines($lines, $prefix = '') {
+    if (!$prefix == '') {
+      echo "$prefix\n";
     }
-    function _lines($lines, $prefix = '') {
-        if (! $prefix == '')
-            echo "$prefix\n";
-        foreach ($lines as $line)
-            echo "$line\n";
-        if (! $prefix == '')
-            echo "$prefix\n";
+    foreach ($lines as $line) {
+      echo "$line\n";
     }
-    function _added($lines) {
-        $this->_lines($lines, ">>>>>>>");
+    if (!$prefix == '') {
+      echo "$prefix\n";
     }
-    function _deleted($lines) {
-        $this->_lines($lines, "<<<<<<<");
-    }
-    function _block_header($xbeg, $xlen, $ybeg, $ylen) {
-        return "";
-    }
-    function _changed($orig, $final) {
-        $this->_deleted($orig);
-        $this->_added($final);
-    }
+  }
+
+  function _added($lines) {
+    $this->_lines($lines, ">>>>>>>");
+  }
+
+  function _deleted($lines) {
+    $this->_lines($lines, "<<<<<<<");
+  }
+
+  function _block_header($xbeg, $xlen, $ybeg, $ylen) {
+    return "";
+  }
+
+  function _changed($orig, $final) {
+    $this->_deleted($orig);
+    $this->_added($final);
+  }
+
 }
+

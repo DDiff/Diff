@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Portions taken from phpwiki-1.3.3.
  *
@@ -30,53 +31,57 @@
  */
 class ArrayDiffFormatter extends DiffFormatter {
 
-	/**
-	 * @param Diff $diff A Diff object.
-	 *
-	 * @return array[] List of associative arrays, each describing a difference.
-	 */
-	public function format( $diff ) {
-		$oldline = 1;
-		$newline = 1;
-		$retval = array();
-		foreach ( $diff->getEdits() as $edit ) {
-			switch ( $edit->getType() ) {
-				case 'add':
-					foreach ( $edit->getClosing() as $line ) {
-						$retval[] = array(
-							'action' => 'add',
-							'new' => $line,
-							'newline' => $newline++
-						);
-					}
-					break;
-				case 'delete':
-					foreach ( $edit->getOrig() as $line ) {
-						$retval[] = array(
-							'action' => 'delete',
-							'old' => $line,
-							'oldline' => $oldline++,
-						);
-					}
-					break;
-				case 'change':
-					foreach ( $edit->getOrig() as $key => $line ) {
-						$retval[] = array(
-							'action' => 'change',
-							'old' => $line,
-							'new' => $edit->getClosing( $key ),
-							'oldline' => $oldline++,
-							'newline' => $newline++,
-						);
-					}
-					break;
-				case 'copy':
-					$oldline += count( $edit->getOrig() );
-					$newline += count( $edit->getOrig() );
-			}
-		}
+  /**
+   * @param Diff $diff A Diff object.
+   *
+   * @return array[] List of associative arrays, each describing a difference.
+   */
+  public function format($diff) {
+    $oldline = 1;
+    $newline = 1;
+    $retval = array();
+    foreach ($diff->getEdits() as $edit) {
+      switch ($edit->getType()) {
+        case 'add':
+          foreach ($edit->getClosing() as $line) {
+            $retval[] = array(
+              'action' => 'add',
+              'new' => $line,
+              'newline' => $newline++,
+            );
+          }
+          break;
 
-		return $retval;
-	}
+        case 'delete':
+          foreach ($edit->getOrig() as $line) {
+            $retval[] = array(
+              'action' => 'delete',
+              'old' => $line,
+              'oldline' => $oldline++,
+            );
+          }
+          break;
+
+        case 'change':
+          foreach ($edit->getOrig() as $key => $line) {
+            $retval[] = array(
+              'action' => 'change',
+              'old' => $line,
+              'new' => $edit->getClosing($key),
+              'oldline' => $oldline++,
+              'newline' => $newline++,
+            );
+          }
+          break;
+
+        case 'copy':
+          $oldline += count($edit->getOrig());
+          $newline += count($edit->getOrig());
+      }
+    }
+
+    return $retval;
+  }
 
 }
+

@@ -8,6 +8,7 @@
 class DrupalDiffFormatter extends DiffFormatter {
 
   var $rows;
+
   var $line_stats = array(
     'counter' => array('x' => 0, 'y' => 0),
     'offset' => array('x' => 0, 'y' => 0),
@@ -35,7 +36,7 @@ class DrupalDiffFormatter extends DiffFormatter {
       array(
         'data' => $ybeg + $this->line_stats['offset']['y'],
         'colspan' => 2,
-      )
+      ),
     );
   }
 
@@ -48,7 +49,7 @@ class DrupalDiffFormatter extends DiffFormatter {
   function _end_block() {
   }
 
-  function _lines($lines, $prefix=' ', $color='white') {
+  function _lines($lines, $prefix = ' ', $color = 'white') {
   }
 
   /**
@@ -63,7 +64,7 @@ class DrupalDiffFormatter extends DiffFormatter {
       array(
         'data' => $line,
         'class' => 'diff-context diff-addedline',
-      )
+      ),
     );
   }
 
@@ -79,7 +80,7 @@ class DrupalDiffFormatter extends DiffFormatter {
       array(
         'data' => $line,
         'class' => 'diff-context diff-deletedline',
-      )
+      ),
     );
   }
 
@@ -92,7 +93,7 @@ class DrupalDiffFormatter extends DiffFormatter {
       array(
         'data' => $line,
         'class' => 'diff-context',
-      )
+      ),
     );
   }
 
@@ -130,11 +131,14 @@ class DrupalDiffFormatter extends DiffFormatter {
     // Hence, we will be calling addedLine/deletedLine without HTML-escaping.
 
     while ($line = array_shift($del)) {
-      $aline = array_shift( $add );
+      $aline = array_shift($add);
       $this->rows[] = array_merge($this->deletedLine($line), isset($aline) ? $this->addedLine($aline) : $this->emptyLine());
     }
-    foreach ($add as $line) {  // If any leftovers
+    // If any leftovers
+    foreach ($add as $line) {
       $this->rows[] = array_merge($this->emptyLine(), $this->addedLine($line));
     }
   }
+
 }
+
