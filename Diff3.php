@@ -1,5 +1,5 @@
 <?php
-rcs_id('$Id: diff3.php,v 1.5 2002-08-20 16:51:46 rurban Exp $');
+
 // diff3.php
 //
 // A class for computing three way diffs
@@ -7,8 +7,6 @@ rcs_id('$Id: diff3.php,v 1.5 2002-08-20 16:51:46 rurban Exp $');
 // Copyright (C) 2001 Geoffrey T. Dairiki <dairiki@dairiki.org>
 // You may copy this code freely under the conditions of the GPL.
 //
-
-require_once('lib/difflib.php');
 
 class _Diff3_Block {
     var $type = 'diff3';
@@ -201,11 +199,3 @@ class Diff3 {
     }
 }
 
-// Local Variables:
-// mode: php
-// tab-width: 8
-// c-basic-offset: 4
-// c-hanging-comment-ender-p: nil
-// indent-tabs-mode: nil
-// End:   
-?>
