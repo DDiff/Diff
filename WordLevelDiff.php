@@ -1,47 +1,78 @@
 <?php
 
-class WordLevelDiff extends MappedDiff
-{
-    function WordLevelDiff ($orig_lines, $final_lines) {
-        list ($orig_words, $orig_stripped) = $this->_split($orig_lines);
-        list ($final_words, $final_stripped) = $this->_split($final_lines);
+/**
+ * @todo document
+ * @private
+ * @subpackage DifferenceEngine
+ */
+class WordLevelDiff extends MappedDiff {
+  function MAX_LINE_LENGTH() {
+    return 10000;
+  }
 
+  function WordLevelDiff($orig_lines, $closing_lines) {
+    list($orig_words, $orig_stripped) = $this->_split($orig_lines);
+    list($closing_words, $closing_stripped) = $this->_split($closing_lines);
 
-        $this->MappedDiff($orig_words, $final_words,
-                          $orig_stripped, $final_stripped);
-    }
+    $this->MappedDiff($orig_words, $closing_words, $orig_stripped, $closing_stripped);
+  }
 
-    function _split($lines) {
-        // FIXME: fix POSIX char class.
-        if (!preg_match_all('/ ( [^\S\n]+ | [[:alnum:]]+ | . ) (?: (?!< \n) [^\S\n])? /xs',
-                            implode("\n", $lines),
-                            $m)) {
-            return array(array(''), array(''));
+  function _split($lines) {
+    $words = array();
+    $stripped = array();
+    $first = TRUE;
+    foreach ($lines as $line) {
+      // If the line is too long, just pretend the entire line is one big word
+      // This prevents resource exhaustion problems
+      if ( $first ) {
+        $first = FALSE;
+      }
+      else {
+        $words[] = "\n";
+        $stripped[] = "\n";
+      }
+      if ( Unicode::strlen( $line ) > $this->MAX_LINE_LENGTH() ) {
+        $words[] = $line;
+        $stripped[] = $line;
+      }
+      else {
+        if (preg_match_all('/ ( [^\S\n]+ | [0-9_A-Za-z\x80-\xff]+ | . ) (?: (?!< \n) [^\S\n])? /xs', $line, $m)) {
+          $words = array_merge($words, $m[0]);
+          $stripped = array_merge($stripped, $m[1]);
         }
-        return array($m[0], $m[1]);
+      }
     }
+    return array($words, $stripped);
+  }
 
-    function orig () {
-        $orig = new _HWLDF_WordAccumulator;
+  function orig() {
+    $orig = new _HWLDF_WordAccumulator;
 
-        foreach ($this->edits as $edit) {
-            if ($edit->type == 'copy')
-                $orig->addWords($edit->orig);
-            elseif ($edit->orig)
-                $orig->addWords($edit->orig, 'del');
-        }
-        return $orig->getLines();
+    foreach ($this->edits as $edit) {
+      if ($edit->type == 'copy') {
+        $orig->addWords($edit->orig);
+      }
+      elseif ($edit->orig) {
+        $orig->addWords($edit->orig, 'mark');
+      }
     }
+    $lines = $orig->getLines();
+    return $lines;
+  }
 
-    function final () {
-        $final = new _HWLDF_WordAccumulator;
+  function closing() {
+    $closing = new _HWLDF_WordAccumulator;
 
-        foreach ($this->edits as $edit) {
-            if ($edit->type == 'copy')
-                $final->addWords($edit->final);
-            elseif ($edit->final)
-                $final->addWords($edit->final, 'ins');
-        }
-        return $final->getLines();
+    foreach ($this->edits as $edit) {
+      if ($edit->type == 'copy') {
+        $closing->addWords($edit->closing);
+      }
+      elseif ($edit->closing) {
+        $closing->addWords($edit->closing, 'mark');
+      }
     }
+    $lines = $closing->getLines();
+    return $lines;
+  }
 }
+
