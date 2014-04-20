@@ -1,178 +1,247 @@
 <?php
+/**
+ * Base for diff rendering classes. Portions taken from phpwiki-1.3.3.
+ *
+ * Copyright © 2000, 2001 Geoffrey T. Dairiki <dairiki@dairiki.org>
+ * You may copy this code freely under the conditions of the GPL.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, write to the Free Software Foundation, Inc.,
+ * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+ * http://www.gnu.org/copyleft/gpl.html
+ *
+ * @file
+ * @ingroup DifferenceEngine
+ */
 
 /**
- * A class to format Diffs
+ * Base class for diff formatters
  *
  * This class formats the diff in classic diff format.
  * It is intended that this class be customized via inheritance,
  * to obtain fancier outputs.
  * @todo document
- * @private
- * @subpackage DifferenceEngine
+ * @ingroup DifferenceEngine
  */
-class DiffFormatter {
-  /**
-   * Should a block header be shown?
-   */
-  var $show_header = TRUE;
+abstract class DiffFormatter {
 
-  /**
-   * Number of leading context "lines" to preserve.
-   *
-   * This should be left at zero for this class, but subclasses
-   * may want to set this to other values.
-   */
-  var $leading_context_lines = 0;
+	/** @var int Number of leading context "lines" to preserve.
+	 *
+	 * This should be left at zero for this class, but subclasses
+	 * may want to set this to other values.
+	 */
+	protected $leadingContextLines = 0;
 
-  /**
-   * Number of trailing context "lines" to preserve.
-   *
-   * This should be left at zero for this class, but subclasses
-   * may want to set this to other values.
-   */
-  var $trailing_context_lines = 0;
+	/** @var int Number of trailing context "lines" to preserve.
+	 *
+	 * This should be left at zero for this class, but subclasses
+	 * may want to set this to other values.
+	 */
+	protected $trailingContextLines = 0;
 
-  /**
-   * Format a diff.
-   *
-   * @param $diff object A Diff object.
-   * @return string The formatted output.
-   */
-  function format($diff) {
-    $xi = $yi = 1;
-    $block = FALSE;
-    $context = array();
+	/**
+	 * Format a diff.
+	 *
+	 * @param Diff $diff
+	 *
+	 * @return string The formatted output.
+	 */
+	public function format( $diff ) {
+		wfProfileIn( __METHOD__ );
 
-    $nlead = $this->leading_context_lines;
-    $ntrail = $this->trailing_context_lines;
+		$xi = $yi = 1;
+		$block = false;
+		$context = array();
 
-    $this->_start_diff();
+		$nlead = $this->leadingContextLines;
+		$ntrail = $this->trailingContextLines;
 
-    foreach ($diff->edits as $edit) {
-      if ($edit->type == 'copy') {
-        if (is_array($block)) {
-          if (sizeof($edit->orig) <= $nlead + $ntrail) {
-            $block[] = $edit;
-          }
-          else {
-            if ($ntrail) {
-              $context = array_slice($edit->orig, 0, $ntrail);
-              $block[] = new _DiffOp_Copy($context);
-            }
-            $this->_block($x0, $ntrail + $xi - $x0, $y0, $ntrail + $yi - $y0, $block);
-            $block = FALSE;
-          }
-        }
-        $context = $edit->orig;
-      }
-      else {
-        if (! is_array($block)) {
-          $context = array_slice($context, sizeof($context) - $nlead);
-          $x0 = $xi - sizeof($context);
-          $y0 = $yi - sizeof($context);
-          $block = array();
-          if ($context) {
-            $block[] = new _DiffOp_Copy($context);
-          }
-        }
-        $block[] = $edit;
-      }
+		$this->startDiff();
 
-      if ($edit->orig) {
-        $xi += sizeof($edit->orig);
-      }
-      if ($edit->closing) {
-        $yi += sizeof($edit->closing);
-      }
-    }
+		// Initialize $x0 and $y0 to prevent IDEs from getting confused.
+		$x0 = $y0 = 0;
+		foreach ( $diff->edits as $edit ) {
+			if ( $edit->type == 'copy' ) {
+				if ( is_array( $block ) ) {
+					if ( count( $edit->orig ) <= $nlead + $ntrail ) {
+						$block[] = $edit;
+					} else {
+						if ( $ntrail ) {
+							$context = array_slice( $edit->orig, 0, $ntrail );
+							$block[] = new DiffOpCopy( $context );
+						}
+						$this->block( $x0, $ntrail + $xi - $x0,
+							$y0, $ntrail + $yi - $y0,
+							$block );
+						$block = false;
+					}
+				}
+				$context = $edit->orig;
+			} else {
+				if ( !is_array( $block ) ) {
+					$context = array_slice( $context, count( $context ) - $nlead );
+					$x0 = $xi - count( $context );
+					$y0 = $yi - count( $context );
+					$block = array();
+					if ( $context ) {
+						$block[] = new DiffOpCopy( $context );
+					}
+				}
+				$block[] = $edit;
+			}
 
-    if (is_array($block)) {
-      $this->_block($x0, $xi - $x0, $y0, $yi - $y0, $block);
-    }
-    $end = $this->_end_diff();
+			if ( $edit->orig ) {
+				$xi += count( $edit->orig );
+			}
+			if ( $edit->closing ) {
+				$yi += count( $edit->closing );
+			}
+		}
 
-    if (!empty($xi)) {
-      $this->line_stats['counter']['x'] += $xi;
-    }
-    if (!empty($yi)) {
-      $this->line_stats['counter']['y'] += $yi;
-    }
+		if ( is_array( $block ) ) {
+			$this->block( $x0, $xi - $x0,
+				$y0, $yi - $y0,
+				$block );
+		}
 
-    return $end;
-  }
+		$end = $this->endDiff();
+		wfProfileOut( __METHOD__ );
 
-  function _block($xbeg, $xlen, $ybeg, $ylen, &$edits) {
-    $this->_start_block($this->_block_header($xbeg, $xlen, $ybeg, $ylen));
-    foreach ($edits as $edit) {
-      if ($edit->type == 'copy') {
-        $this->_context($edit->orig);
-      }
-      elseif ($edit->type == 'add') {
-        $this->_added($edit->closing);
-      }
-      elseif ($edit->type == 'delete') {
-        $this->_deleted($edit->orig);
-      }
-      elseif ($edit->type == 'change') {
-        $this->_changed($edit->orig, $edit->closing);
-      }
-      else {
-        trigger_error('Unknown edit type', E_USER_ERROR);
-      }
-    }
-    $this->_end_block();
-  }
+		return $end;
+	}
 
-  function _start_diff() {
-    ob_start();
-  }
+	/**
+	 * @param int $xbeg
+	 * @param int $xlen
+	 * @param int $ybeg
+	 * @param int $ylen
+	 * @param array $edits
+	 *
+	 * @throws MWException If the edit type is not known.
+	 */
+	protected function block( $xbeg, $xlen, $ybeg, $ylen, &$edits ) {
+		wfProfileIn( __METHOD__ );
+		$this->startBlock( $this->blockHeader( $xbeg, $xlen, $ybeg, $ylen ) );
+		foreach ( $edits as $edit ) {
+			if ( $edit->type == 'copy' ) {
+				$this->context( $edit->orig );
+			} elseif ( $edit->type == 'add' ) {
+				$this->added( $edit->closing );
+			} elseif ( $edit->type == 'delete' ) {
+				$this->deleted( $edit->orig );
+			} elseif ( $edit->type == 'change' ) {
+				$this->changed( $edit->orig, $edit->closing );
+			} else {
+				throw new MWException( "Unknown edit type: {$edit->type}" );
+			}
+		}
+		$this->endBlock();
+		wfProfileOut( __METHOD__ );
+	}
 
-  function _end_diff() {
-    $val = ob_get_contents();
-    ob_end_clean();
-    return $val;
-  }
+	protected function startDiff() {
+		ob_start();
+	}
 
-  function _block_header($xbeg, $xlen, $ybeg, $ylen) {
-    if ($xlen > 1) {
-      $xbeg .= "," . ($xbeg + $xlen - 1);
-    }
-    if ($ylen > 1) {
-      $ybeg .= "," . ($ybeg + $ylen - 1);
-    }
+	/**
+	 * @return string
+	 */
+	protected function endDiff() {
+		$val = ob_get_contents();
+		ob_end_clean();
 
-    return $xbeg . ($xlen ? ($ylen ? 'c' : 'd') : 'a') . $ybeg;
-  }
+		return $val;
+	}
 
-  function _start_block($header) {
-    if ($this->show_header) {
-      echo $header . "\n";
-    }
-  }
+	/**
+	 * @param int $xbeg
+	 * @param int $xlen
+	 * @param int $ybeg
+	 * @param int $ylen
+	 *
+	 * @return string
+	 */
+	protected function blockHeader( $xbeg, $xlen, $ybeg, $ylen ) {
+		if ( $xlen > 1 ) {
+			$xbeg .= ',' . ( $xbeg + $xlen - 1 );
+		}
+		if ( $ylen > 1 ) {
+			$ybeg .= ',' . ( $ybeg + $ylen - 1 );
+		}
 
-  function _end_block() {
-  }
+		return $xbeg . ( $xlen ? ( $ylen ? 'c' : 'd' ) : 'a' ) . $ybeg;
+	}
 
-  function _lines($lines, $prefix = ' ') {
-    foreach ($lines as $line) {
-      echo "$prefix $line\n";
-    }
-  }
+	/**
+	 * Called at the start of a block of connected edits.
+	 * This default implementation writes the header and a newline to the output buffer.
+	 *
+	 * @param string $header
+	 */
+	protected function startBlock( $header ) {
+		echo $header . "\n";
+	}
 
-  function _context($lines) {
-    $this->_lines($lines);
-  }
+	/**
+	 * Called at the end of a block of connected edits.
+	 * This default implementation does nothing.
+	 */
+	protected function endBlock() {
+	}
 
-  function _added($lines) {
-    $this->_lines($lines, '>');
-  }
-  function _deleted($lines) {
-    $this->_lines($lines, '<');
-  }
+	/**
+	 * Writes all (optionally prefixed) lines to the output buffer, separated by newlines.
+	 *
+	 * @param string[] $lines
+	 * @param string $prefix
+	 */
+	protected function lines( $lines, $prefix = ' ' ) {
+		foreach ( $lines as $line ) {
+			echo "$prefix $line\n";
+		}
+	}
 
-  function _changed($orig, $closing) {
-    $this->_deleted($orig);
-    echo "---\n";
-    $this->_added($closing);
-  }
+	/**
+	 * @param string[] $lines
+	 */
+	protected function context( $lines ) {
+		$this->lines( $lines );
+	}
+
+	/**
+	 * @param string[] $lines
+	 */
+	protected function added( $lines ) {
+		$this->lines( $lines, '>' );
+	}
+
+	/**
+	 * @param string[] $lines
+	 */
+	protected function deleted( $lines ) {
+		$this->lines( $lines, '<' );
+	}
+
+	/**
+	 * Writes the two sets of lines to the output buffer, separated by "---" and a newline.
+	 *
+	 * @param string[] $orig
+	 * @param string[] $closing
+	 */
+	protected function changed( $orig, $closing ) {
+		$this->deleted( $orig );
+		echo "---\n";
+		$this->added( $closing );
+	}
+
 }
