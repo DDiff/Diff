@@ -1,24 +1,136 @@
-<?php
-rcs_id('$Id: difflib.php,v 1.7 2003-01-03 22:27:17 carstenklapp Exp $');
+<?
+# See diff.doc
 
-// difflib.php
-//
-// A PHP diff engine for phpwiki.
+class DifferenceEngine {
+	/* private */ var $mOldid, $mNewid;
+	/* private */ var $mOldtitle, $mNewtitle;
+	/* private */ var $mOldtext, $mNewtext;
+
+	function DifferenceEngine( $old, $new )
+	{
+		$this->mOldid = $old;
+		$this->mNewid = $new;
+	}
+
+	function showDiffPage()
+	{
+		global $wgUser, $wgTitle, $wgOut, $wgLang;
+
+		$t = $wgTitle->getPrefixedText() . " (Diff: {$this->mOldid}, " .
+		  "{$this->mNewid})";
+		$mtext = str_replace( "$1", $t, wfMsg( "missingarticle" ) );
+
+		$wgOut->setArticleFlag( false );
+		if ( ! $this->loadText() ) {
+			$wgOut->setPagetitle( wfMsg( "errorpagetitle" ) );
+			$wgOut->addHTML( $mtext );
+			return;
+		}
+		$wgOut->supressQuickbar();
+		$wgOut->setSubtitle( wfMsg( "difference" ) );
+		$wgOut->setRobotpolicy( "noindex,follow" );
+
+		DifferenceEngine::showDiff( $this->mOldtext, $this->mNewtext,
+		  $this->mOldtitle, $this->mNewtitle );
+		$wgOut->addHTML( "<hr><h2>{$this->mNewtitle}</h2>\n" );
+		$wgOut->addWikiText( $this->mNewtext );
+	}
+
+	function showDiff( $otext, $ntext, $otitle, $ntitle )
+	{
+		global $wgOut;
+
+		$ota = explode( "\n", str_replace( "\r\n", "\n",
+		  htmlspecialchars( $otext ) ) );
+		$nta = explode( "\n", str_replace( "\r\n", "\n",
+		  htmlspecialchars( $ntext ) ) );
+
+		$wgOut->addHTML( "<table width='98%' border=0
+cellpadding=0 cellspacing='4px'><tr>
+<td colspan=2 width='50%' align=center bgcolor='#cccccc'>
+<strong>{$otitle}</strong></td>
+<td colspan=2 width='50%' align=center bgcolor='#cccccc'>
+<strong>{$ntitle}</strong></td>
+</tr>\n" );
+
+		$diffs = new Diff( $ota, $nta );
+		$formatter = new TableDiffFormatter();
+		$formatter->format( $diffs );
+		$wgOut->addHTML( "</table>\n" );
+	}
+
+	# Load the text of the articles to compare.  If newid is 0, then compare
+	# the old article in oldid to the current article; if oldid is 0, then
+	# compare the current article to the immediately previous one (ignoring
+	# the value of newid).
+	#
+	function loadText()
+	{
+		global $wgTitle, $wgOut, $wgLang;
+		$fname = "DifferenceEngine::loadText";
+
+		if ( 0 == $this->mNewid || 0 == $this->mOldid ) {
+			$wgOut->setArticleFlag( true );
+			$this->mNewtitle = wfMsg( "currentrev" );
+			$id = $wgTitle->getArticleID();
+
+			$sql = "SELECT cur_text FROM cur WHERE cur_id={$id}";
+			$res = wfQuery( $sql, $fname );
+			if ( 0 == wfNumRows( $res ) ) { return false; }
+
+			$s = wfFetchObject( $res );
+			$this->mNewtext = $s->cur_text;
+		} else {
+			$sql = "SELECT old_timestamp,old_text FROM old WHERE " .
+			  "old_id={$this->mNewid}";
+
+			$res = wfQuery( $sql, $fname );
+			if ( 0 == wfNumRows( $res ) ) { return false; }
+
+			$s = wfFetchObject( $res );
+			$this->mNewtext = $s->old_text;
+
+			$t = $wgLang->timeanddate( $s->old_timestamp, true );
+			$this->mNewtitle = str_replace( "$1", "{$t}",
+			  wfMsg( "revisionasof" ) );
+		}
+		if ( 0 == $this->mOldid ) {
+			$sql = "SELECT old_timestamp,old_text FROM old USE INDEX (name_title_timestamp) WHERE " .
+			  "old_namespace=" . $wgTitle->getNamespace() . " AND " .
+			  "old_title='" . wfStrencode( $wgTitle->getDBkey() ) .
+			  "' ORDER BY inverse_timestamp LIMIT 1";
+			$res = wfQuery( $sql, $fname );
+		} else {
+			$sql = "SELECT old_timestamp,old_text FROM old WHERE " .
+			  "old_id={$this->mOldid}";
+			$res = wfQuery( $sql, $fname );
+		}
+		if ( 0 == wfNumRows( $res ) ) { return false; }
+
+		$s = wfFetchObject( $res );
+		$this->mOldtext = $s->old_text;
+
+		$t = $wgLang->timeanddate( $s->old_timestamp, true );
+		$this->mOldtitle = str_replace( "$1", "{$t}",
+		  wfMsg( "revisionasof" ) );
+
+		return true;
+	}
+}
+
+// A PHP diff engine for phpwiki. (Taken from phpwiki-1.3.3)
 //
 // Copyright (C) 2000, 2001 Geoffrey T. Dairiki <dairiki@dairiki.org>
 // You may copy this code freely under the conditions of the GPL.
 //
 
-// FIXME: possibly remove assert()'s for production version?
-
-// PHP3 does not have assert()
 define('USE_ASSERTS', function_exists('assert'));
 
 class _DiffOp {
     var $type;
     var $orig;
     var $final;
-
+    
     function reverse() {
         trigger_error("pure virtual", E_USER_ERROR);
     }
@@ -34,7 +146,7 @@ class _DiffOp {
 
 class _DiffOp_Copy extends _DiffOp {
     var $type = 'copy';
-
+    
     function _DiffOp_Copy ($orig, $final = false) {
         if (!is_array($final))
             $final = $orig;
@@ -49,7 +161,7 @@ class _DiffOp_Copy extends _DiffOp {
 
 class _DiffOp_Delete extends _DiffOp {
     var $type = 'delete';
-
+    
     function _DiffOp_Delete ($lines) {
         $this->orig = $lines;
         $this->final = false;
@@ -62,7 +174,7 @@ class _DiffOp_Delete extends _DiffOp {
 
 class _DiffOp_Add extends _DiffOp {
     var $type = 'add';
-
+    
     function _DiffOp_Add ($lines) {
         $this->final = $lines;
         $this->orig = false;
@@ -75,7 +187,7 @@ class _DiffOp_Add extends _DiffOp {
 
 class _DiffOp_Change extends _DiffOp {
     var $type = 'change';
-
+    
     function _DiffOp_Change ($orig, $final) {
         $this->orig = $orig;
         $this->final = $final;
@@ -85,8 +197,8 @@ class _DiffOp_Change extends _DiffOp {
         return new _DiffOp_Change($this->final, $this->orig);
     }
 }
-
-
+        
+      
 /**
  * Class used internally by Diff to actually compute the diffs.
  *
@@ -119,7 +231,7 @@ class _DiffEngine
         unset($this->seq);
         unset($this->in_seq);
         unset($this->lcs);
-
+         
         // Skip leading common lines.
         for ($skip = 0; $skip < $n_from && $skip < $n_to; $skip++) {
             if ($from_lines[$skip] != $to_lines[$skip])
@@ -133,7 +245,7 @@ class _DiffEngine
                 break;
             $this->xchanged[$xi] = $this->ychanged[$yi] = false;
         }
-
+        
         // Ignore lines which do not exist in both files.
         for ($xi = $skip; $xi < $n_from - $endskip; $xi++)
             $xhash[$from_lines[$xi]] = 1;
@@ -185,7 +297,7 @@ class _DiffEngine
             $add = array();
             while ($yi < $n_to && $this->ychanged[$yi])
                 $add[] = $to_lines[$yi++];
-
+            
             if ($delete && $add)
                 $edits[] = new _DiffOp_Change($delete, $add);
             elseif ($delete)
@@ -195,7 +307,7 @@ class _DiffEngine
         }
         return $edits;
     }
-
+    
 
     /* Divide the Largest Common Subsequence (LCS) of the sequences
      * [XOFF, XLIM) and [YOFF, YLIM) into NCHUNKS approximately equally
@@ -235,7 +347,7 @@ class _DiffEngine
 	$this->seq[0]= $yoff - 1;
 	$this->in_seq = array();
 	$ymids[0] = array();
-
+    
 	$numer = $xlim - $xoff + $nchunks - 1;
 	$x = $xoff;
 	for ($chunk = 0; $chunk < $nchunks; $chunk++) {
@@ -402,14 +514,14 @@ class _DiffEngine
 	     */
 	    while ($j < $other_len && $other_changed[$j])
 		$j++;
-	
+	    
 	    while ($i < $len && ! $changed[$i]) {
 		USE_ASSERTS && assert('$j < $other_len && ! $other_changed[$j]');
 		$i++; $j++;
 		while ($j < $other_len && $other_changed[$j])
 		    $j++;
             }
-
+            
 	    if ($i == $len)
 		break;
 
@@ -491,7 +603,7 @@ class _DiffEngine
 /**
  * Class representing a 'diff' between two sequences of strings.
  */
-class Diff
+class Diff 
 {
     var $edits;
 
@@ -540,7 +652,7 @@ class Diff
         }
         return true;
     }
-
+  
     /**
      * Compute the length of the Longest Common Subsequence (LCS).
      *
@@ -567,7 +679,7 @@ class Diff
      */
     function orig() {
         $lines = array();
-
+        
         foreach ($this->edits as $edit) {
             if ($edit->orig)
                 array_splice($lines, sizeof($lines), 0, $edit->orig);
@@ -585,7 +697,7 @@ class Diff
      */
     function final() {
         $lines = array();
-
+        
         foreach ($this->edits as $edit) {
             if ($edit->final)
                 array_splice($lines, sizeof($lines), 0, $edit->final);
@@ -594,7 +706,7 @@ class Diff
     }
 
     /**
-     * Check a Diff for validity.
+     * Check a Diff for validity. 
      *
      * This is here only for debugging purposes.
      */
@@ -622,10 +734,7 @@ class Diff
         trigger_error("Diff okay: LCS = $lcs", E_USER_NOTICE);
     }
 }
-
-
-
-
+            
 /**
  * FIXME: bad name.
  */
@@ -660,7 +769,7 @@ extends Diff
 
         assert(sizeof($from_lines) == sizeof($mapped_from_lines));
         assert(sizeof($to_lines) == sizeof($mapped_to_lines));
-
+        
         $this->Diff($mapped_from_lines, $mapped_to_lines);
 
         $xi = $yi = 0;
@@ -670,7 +779,7 @@ extends Diff
                 $orig = array_slice($from_lines, $xi, sizeof($orig));
                 $xi += sizeof($orig);
             }
-
+            
             $final = &$this->edits[$i]->final;
             if (is_array($final)) {
                 $final = array_slice($to_lines, $yi, sizeof($final));
@@ -679,7 +788,6 @@ extends Diff
         }
     }
 }
-
 
 /**
  * A class to format Diffs
@@ -744,7 +852,7 @@ class DiffFormatter
             }
             else {
                 if (! is_array($block)) {
-                    $context = array_slice($context, max(0, sizeof($context) - $nlead));
+                    $context = array_slice($context, sizeof($context) - $nlead);
                     $x0 = $xi - sizeof($context);
                     $y0 = $yi - sizeof($context);
                     $block = array();
@@ -803,11 +911,11 @@ class DiffFormatter
 
         return $xbeg . ($xlen ? ($ylen ? 'c' : 'd') : 'a') . $ybeg;
     }
-
+    
     function _start_block($header) {
         echo $header;
     }
-
+    
     function _end_block() {
     }
 
@@ -815,7 +923,7 @@ class DiffFormatter
         foreach ($lines as $line)
             echo "$prefix $line\n";
     }
-
+    
     function _context($lines) {
         $this->_lines($lines);
     }
@@ -834,94 +942,197 @@ class DiffFormatter
     }
 }
 
+
 /**
- * "Unified" diff formatter.
- *
- * This class formats the diff in classic "unified diff" format.
+ *  Additions by Axel Boldt follow, partly taken from diff.php, phpwiki-1.3.3
+ * 
  */
-class UnifiedDiffFormatter extends DiffFormatter
+
+define('NBSP', "\xA0");         // iso-8859-x non-breaking space.
+
+class _HWLDF_WordAccumulator {
+    function _HWLDF_WordAccumulator () {
+        $this->_lines = array();
+        $this->_line = '';
+        $this->_group = '';
+        $this->_tag = '';
+    }
+
+    function _flushGroup ($new_tag) {
+        if ($this->_group !== '') {
+	  if ($this->_tag == 'mark') 
+            $this->_line .= "<font color=\"red\">$this->_group</font>";
+	  else
+	    $this->_line .= $this->_group;
+	}
+        $this->_group = '';
+        $this->_tag = $new_tag;
+    }
+    
+    function _flushLine ($new_tag) {
+        $this->_flushGroup($new_tag);
+        if ($this->_line != '')
+            $this->_lines[] = $this->_line;
+        $this->_line = '';
+    }
+                
+    function addWords ($words, $tag = '') {
+        if ($tag != $this->_tag)
+            $this->_flushGroup($tag);
+
+        foreach ($words as $word) {
+            // new-line should only come as first char of word.
+            if ($word == '')
+                continue;
+            if ($word[0] == "\n") {
+                $this->_group .= NBSP;
+                $this->_flushLine($tag);
+                $word = substr($word, 1);
+            }
+            assert(!strstr($word, "\n"));
+            $this->_group .= $word;
+        }
+    }
+
+    function getLines() {
+        $this->_flushLine('~done');
+        return $this->_lines;
+    }
+}
+
+class WordLevelDiff extends MappedDiff
 {
-    function UnifiedDiffFormatter($context_lines = 4) {
-        $this->leading_context_lines = $context_lines;
-        $this->trailing_context_lines = $context_lines;
+    function WordLevelDiff ($orig_lines, $final_lines) {
+        list ($orig_words, $orig_stripped) = $this->_split($orig_lines);
+        list ($final_words, $final_stripped) = $this->_split($final_lines);
+
+        
+        $this->MappedDiff($orig_words, $final_words,
+                          $orig_stripped, $final_stripped);
     }
 
-    function _block_header($xbeg, $xlen, $ybeg, $ylen) {
-        if ($xlen != 1)
-            $xbeg .= "," . $xlen;
-        if ($ylen != 1)
-            $ybeg .= "," . $ylen;
-        return "@@ -$xbeg +$ybeg @@";
+    function _split($lines) {
+        // FIXME: fix POSIX char class.
+#        if (!preg_match_all('/ ( [^\S\n]+ | [[:alnum:]]+ | . ) (?: (?!< \n) [^\S\n])? /xs',
+        if (!preg_match_all('/ ( [^\S\n]+ | [0-9_A-Za-z\x80-\xff]+ | . ) (?: (?!< \n) [^\S\n])? /xs',
+                            implode("\n", $lines),
+                            $m)) {
+            return array(array(''), array(''));
+        }
+        return array($m[0], $m[1]);
     }
 
-    function _added($lines) {
-        $this->_lines($lines, "+");
+    function orig () {
+        $orig = new _HWLDF_WordAccumulator;
+        
+        foreach ($this->edits as $edit) {
+            if ($edit->type == 'copy')
+                $orig->addWords($edit->orig);
+            elseif ($edit->orig)
+                $orig->addWords($edit->orig, 'mark');
+        }
+        return $orig->getLines();
     }
-    function _deleted($lines) {
-        $this->_lines($lines, "-");
-    }
-    function _changed($orig, $final) {
-        $this->_deleted($orig);
-        $this->_added($final);
+
+    function final () {
+        $final = new _HWLDF_WordAccumulator;
+        
+        foreach ($this->edits as $edit) {
+            if ($edit->type == 'copy')
+                $final->addWords($edit->final);
+            elseif ($edit->final)
+                $final->addWords($edit->final, 'mark');
+        }
+        return $final->getLines();
     }
 }
 
 /**
- * block conflict diff formatter.
- *
- * This class will format a diff identical to Diff3 (i.e. editpage
- * conflicts), but when there are only two source files. To be used by
- * future enhancements to reloading / upgrading pgsrc.
- *
- * Functional but not finished yet, need to eliminate redundant block
- * suffixes (i.e. "=======" immediately followed by another prefix)
- * see class LoadFileConflictPageEditor
+ *  Wikipedia Table style diff formatter.
+ * 
  */
-class BlockDiffFormatter extends DiffFormatter
+class TableDiffFormatter extends DiffFormatter
 {
-    function BlockDiffFormatter($context_lines = 4) {
-        $this->leading_context_lines = $context_lines;
-        $this->trailing_context_lines = $context_lines;
-    }
-    function _lines($lines, $prefix = '') {
-        if (! $prefix == '')
-            echo "$prefix\n";
-        foreach ($lines as $line)
-            echo "$line\n";
-        if (! $prefix == '')
-            echo "$prefix\n";
-    }
+	function TableDiffFormatter() {
+		$this->leading_context_lines = 2;
+		$this->trailing_context_lines = 2;
+	}
+    
+	function _block_header( $xbeg, $xlen, $ybeg, $ylen ) {
+		$l1 = str_replace( "$1", $xbeg, wfMsg( "lineno" ) );
+		$l2 = str_replace( "$1", $ybeg, wfMsg( "lineno" ) );
+
+		$r = "<tr><td colspan=2 align=left><strong>{$l1}</strong></td>\n" .
+		  "<td colspan=2 align=left><strong>{$l2}</strong></td></tr>\n";
+		return $r;
+	}
+
+	function _start_block( $header ) {
+		global $wgOut;
+		$wgOut->addHTML( $header );
+	}
+
+	function _end_block() {
+	}
+
+	function _lines( $lines, $prefix=' ', $color="white" ) {
+	}
+
+	function addedLine( $line ) {
+		return "<td>+</td><td bgcolor='#ccffcc'>" .
+		  "<small>{$line}</small></td>";
+	}
+
+	function deletedLine( $line ) {
+		return "<td>-</td><td bgcolor='#ffffaa'>" .
+		  "<small>{$line}</small></td>";
+	}
+
+	function emptyLine() {
+		return "<td colspan=2>&nbsp;</td>";
+	}
+
+	function contextLine( $line ) {
+		return "<td> </td><td bgcolor='white'><small>{$line}</small></td>";
+	}
+    
     function _added($lines) {
-        $this->_lines($lines, ">>>>>>>");
-    }
-    function _deleted($lines) {
-        $this->_lines($lines, "<<<<<<<");
-    }
-    function _block_header($xbeg, $xlen, $ybeg, $ylen) {
-        return "";
-    }
-    function _changed($orig, $final) {
-        $this->_deleted($orig);
-        $this->_added($final);
+		global $wgOut;
+		foreach ($lines as $line) {
+			$wgOut->addHTML( "<tr>" . $this->emptyLine() .
+			  $this->addedLine( $line ) . "</tr>\n" );
+		}
+	}
+
+	function _deleted($lines) {
+		global $wgOut;
+		foreach ($lines as $line) {
+			$wgOut->addHTML( "<tr>" . $this->deletedLine( $line ) .
+			  $this->emptyLine() . "</tr>\n" );
+		}
+	}
+
+	function _context( $lines ) {
+		global $wgOut;
+		foreach ($lines as $line) {
+			$wgOut->addHTML( "<tr>" . $this->contextLine( $line ) .
+			  $this->contextLine( $line ) . "</tr>\n" );
+		}
+	}
+
+	function _changed( $orig, $final ) {
+		global $wgOut;
+        $diff = new WordLevelDiff( $orig, $final );
+		$del = $diff->orig();
+		$add = $diff->final();
+
+		while ( $line = array_shift( $del ) ) {
+			$aline = array_shift( $add );
+			$wgOut->addHTML( "<tr>" . $this->deletedLine( $line ) .
+			  $this->addedLine( $aline ) . "</tr>\n" );
+		}
+		$this->_added( $add ); # If any leftovers
     }
 }
 
-/**
- $Log: not supported by cvs2svn $
- Revision 1.6  2003/01/02 22:51:43  carstenklapp
- Specifying a leading diff context size larger than the available
- context now returns the available number of lines instead of the
- default. (Prevent negative offsets to array_slice() when $nlead >
- sizeof($context)). Added BlockDiffFormatter, to be used by future
- enhancements to reload / upgrade pgsrc.
-
- */
-
-// Local Variables:
-// mode: php
-// tab-width: 8
-// c-basic-offset: 4
-// c-hanging-comment-ender-p: nil
-// indent-tabs-mode: nil
-// End:
 ?>
