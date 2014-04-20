@@ -29,7 +29,7 @@
  * (http://citeseer.ist.psu.edu/myers86ond.html) with range compression (see Wu et al.'s
  * "An O(NP) Sequence Comparison Algorithm").
  *
- * This implementation supports an upper bound on the excution time.
+ * This implementation supports an upper bound on the execution time.
  *
  * Complexity: O((M + N)D) worst case time, O(M + N + D^2) expected time, O(M + N) space
  *
@@ -64,7 +64,7 @@ class WikiDiff3 {
 
 	public function diff( /*array*/ $from, /*array*/ $to ) {
 		// remember initial lengths
-		$m = sizeof( $from );
+		$m = count( $from );
 		$n = count( $to );
 
 		$this->heuristicUsed = false;
@@ -490,7 +490,6 @@ class WikiDiff3 {
 
 		$temp = array( 0, 0, 0 );
 
-
 		$max_progress = array_fill( 0, ceil( max( $forward_end_diag - $forward_start_diag,
 				$backward_end_diag - $backward_start_diag ) / 2 ), $temp );
 		$num_progress = 0; // the 1st entry is current, it is initialized
@@ -546,9 +545,12 @@ class WikiDiff3 {
 		}
 
 		// return the middle diagonal with maximal progress.
-		return $max_progress[floor( $num_progress / 2 )];
+		return $max_progress[(int)floor( $num_progress / 2 )];
 	}
 
+	/**
+	 * @return mixed
+	 */
 	public function getLcsLength() {
 		if ( $this->heuristicUsed && !$this->lcsLengthCorrectedForHeuristic ) {
 			$this->lcsLengthCorrectedForHeuristic = true;
